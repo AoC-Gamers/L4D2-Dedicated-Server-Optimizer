@@ -63,6 +63,13 @@ register_module() {
   MODULE_TIMEOUT=60  # Tiempo límite en segundos (por defecto: 180)
   MODULE_REQUIRES_REBOOT=false  # true si requiere reinicio
   
+  # COMPATIBILIDAD DE ENTORNO (OBLIGATORIA)
+  # Opciones: "host", "docker", "both"
+  # - "host": Solo sistemas host (bare metal/VM)
+  # - "docker": Solo contenedores Docker
+  # - "both": Compatible con ambos entornos
+  MODULE_ENVIRONMENT="both"
+  
   # DEPENDENCIAS (OPCIONAL - dejar arrays vacíos si no hay)
   MODULE_DEPENDENCIES=()  # Otros módulos requeridos (por MODULE_NAME)
   MODULE_REQUIRED_PACKAGES=("curl" "wget")  # Paquetes del sistema
@@ -523,7 +530,124 @@ else
 fi
 ```
 
-## 📚 Recursos Adicionales
+## � Compatibilidad con Entornos Docker
+
+### Configuración de Compatibilidad
+
+Desde la versión 2.0, el sistema soporta detección automática de entornos Docker. Los módulos deben especificar su compatibilidad:
+
+```bash
+register_module() {
+  # ... otras configuraciones ...
+  
+  # COMPATIBILIDAD DE ENTORNO (OBLIGATORIA)
+  MODULE_ENVIRONMENT="both"  # "host", "docker", o "both"
+}
+```
+
+### Tipos de Compatibilidad
+
+#### `MODULE_ENVIRONMENT="host"`
+Para módulos que **solo pueden ejecutarse en el sistema host**:
+- Optimizaciones de kernel (network, memory, CPU, disk)
+- Configuraciones que requieren acceso directo al hardware
+- Módulos que modifican parámetros del sistema base
+
+```bash
+# Ejemplo: Módulo de optimización de red
+MODULE_ENVIRONMENT="host"  # Solo host porque modifica kernel network stack
+```
+
+#### `MODULE_ENVIRONMENT="docker"`
+Para módulos **específicos de contenedores Docker**:
+- Configuraciones internas de contenedor
+- Optimizaciones que solo aplican dentro de Docker
+- Módulos que requieren el entorno contenederizado
+
+```bash
+# Ejemplo: Módulo de configuración específica de contenedor
+MODULE_ENVIRONMENT="docker"  # Solo Docker, no aplica en host
+```
+
+#### `MODULE_ENVIRONMENT="both"`
+Para módulos **compatibles con ambos entornos**:
+- Configuraciones de aplicación
+- DNS y resolución de nombres
+- Configuraciones que funcionan independientemente del entorno
+
+```bash
+# Ejemplo: Módulo de DNS
+MODULE_ENVIRONMENT="both"  # Funciona en host y Docker
+```
+
+### Detección Automática en el Módulo
+
+Si tu módulo necesita comportamiento específico según el entorno:
+
+```bash
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  # Cargar funciones de detección (disponibles automáticamente)
+  register_module
+  
+  # Detectar entorno actual
+  is_docker=$(detect_docker_environment)
+  current_env="host"
+  if [[ "$is_docker" == "true" ]]; then
+    current_env="docker"
+  fi
+  
+  log_message "$MODULE_NAME" "INFO" "Detected environment: $current_env"
+  
+  # Lógica específica por entorno
+  if [[ "$current_env" == "docker" ]]; then
+    log_message "$MODULE_NAME" "INFO" "Applying Docker-specific optimizations..."
+    # Código específico para Docker
+  else
+    log_message "$MODULE_NAME" "INFO" "Applying host-specific optimizations..."
+    # Código específico para host
+  fi
+fi
+```
+
+### Recomendaciones por Tipo de Optimización
+
+#### Optimizaciones que DEBEN ser "host"
+```bash
+# Red: kernel network stack
+MODULE_ENVIRONMENT="host"  # network_base.sh, tcp_udp_params.sh
+
+# Memoria: kernel memory management  
+MODULE_ENVIRONMENT="host"  # swap_opt.sh, thp_disable.sh
+
+# CPU/IRQ: hardware interrupt handling
+MODULE_ENVIRONMENT="host"  # irq_opt.sh
+
+# Disco: I/O scheduler
+MODULE_ENVIRONMENT="host"  # disk_opt.sh
+```
+
+#### Optimizaciones que pueden ser "both"
+```bash
+# DNS: puede configurarse independientemente
+MODULE_ENVIRONMENT="both"  # dns_optimizer.sh
+
+# IPv6: puede desactivarse por contenedor (con privilegios)
+MODULE_ENVIRONMENT="both"  # ipv6_disable.sh
+```
+
+### Verificación de Compatibilidad
+
+El sistema verifica automáticamente la compatibilidad antes de ejecutar:
+
+```bash
+# Si el módulo no es compatible, se muestra:
+[INCOMPATIBLE - host only]  # En entorno Docker
+[INCOMPATIBLE - docker only]  # En entorno host
+
+# Y se previene la ejecución con mensaje informativo
+```
+
+## �📚 Recursos Adicionales
 
 ### Archivos de Referencia
 

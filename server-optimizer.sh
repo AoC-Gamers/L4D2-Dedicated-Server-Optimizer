@@ -411,6 +411,91 @@ get_missing_dependencies() {
   echo "$result"
 }
 
+# =============================================================================
+# DOCKER ENVIRONMENT DETECTION FUNCTIONS
+# =============================================================================
+
+# Function to detect if running inside Docker container
+detect_docker_environment() {
+  local is_docker=false
+  
+  # Method 1: Check for .dockerenv file
+  if [[ -f /.dockerenv ]]; then
+    is_docker=true
+  fi
+  
+  # Method 2: Check cgroup for docker
+  if [[ -f /proc/1/cgroup ]] && grep -q docker /proc/1/cgroup 2>/dev/null; then
+    is_docker=true
+  fi
+  
+  # Method 3: Check for container environment variable
+  if [[ -n "${container:-}" ]] || [[ -n "${DOCKER_CONTAINER:-}" ]]; then
+    is_docker=true
+  fi
+  
+  # Method 4: Check systemd-detect-virt if available
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    if systemd-detect-virt --container >/dev/null 2>&1; then
+      is_docker=true
+    fi
+  fi
+  
+  echo "$is_docker"
+}
+
+# Function to check if module is compatible with current environment
+is_module_environment_compatible() {
+  local module_file="$1"
+  local module_environment="${MODULE_METADATA["${module_file}:environment"]:-both}"
+  local current_env
+  
+  # Detect current environment
+  if [[ "$(detect_docker_environment)" == "true" ]]; then
+    current_env="docker"
+  else
+    current_env="host"
+  fi
+  
+  # Check compatibility
+  case "$module_environment" in
+    "both")
+      return 0  # Compatible with both
+      ;;
+    "$current_env")
+      return 0  # Compatible with current environment
+      ;;
+    *)
+      return 1  # Not compatible
+      ;;
+  esac
+}
+
+# Function to get environment-incompatible modules count and list
+get_environment_incompatible_info() {
+  local incompatible_count=0
+  local incompatible_list=()
+  local current_env
+  
+  # Detect current environment
+  if [[ "$(detect_docker_environment)" == "true" ]]; then
+    current_env="docker"
+  else
+    current_env="host"
+  fi
+  
+  # Check each module for compatibility
+  for module in "${MODULE_ORDER[@]}"; do
+    if ! is_module_environment_compatible "$module"; then
+      ((incompatible_count++))
+      local module_display_name="${MODULE_METADATA["${module}:name"]:-${module%.sh}}"
+      incompatible_list+=("$module_display_name")
+    fi
+  done
+  
+  echo "$incompatible_count|${incompatible_list[*]}"
+}
+
 # Function to show banner
 show_banner() {
   clear
@@ -433,6 +518,28 @@ show_module_menu() {
     printf "\033[1;31m🐛 DEBUG MODE ENABLED - Development features active\033[0m\n"
   fi
   
+  # Show Docker environment information
+  local is_docker=$(detect_docker_environment)
+  local current_env="host"
+  if [[ "$is_docker" == "true" ]]; then
+    current_env="docker"
+    printf "\033[1;36m🐳 DOCKER ENVIRONMENT DETECTED\033[0m\n"
+    
+    # Get incompatible modules info
+    local env_info=$(get_environment_incompatible_info)
+    local incompatible_count="${env_info%%|*}"
+    local incompatible_list="${env_info##*|}"
+    
+    if [[ $incompatible_count -gt 0 ]]; then
+      printf "\033[1;33m⚠️  %d modules are not available in Docker containers\033[0m\n" "$incompatible_count"
+      if [[ "$OPTIMIZER_DEBUG" == "1" ]]; then
+        printf "\033[0;90m   Incompatible modules: %s\033[0m\n" "$incompatible_list"
+      fi
+    fi
+  else
+    printf "\033[1;32m🖥️  HOST ENVIRONMENT DETECTED - All modules available\033[0m\n"
+  fi
+  
   printf "\n"
   
   local counter=1
@@ -452,9 +559,12 @@ show_module_menu() {
     local module_category="${MODULE_METADATA["${module}:category"]:-other}"
     local module_version="${MODULE_METADATA["${module}:version"]:-1.0.0}"
     
-    # Check dependencies before determining status
+    # Check dependencies and environment compatibility before determining status
     if [[ "$status" == "NOT_INSTALLED" ]] || [[ "$status" == "NOT INSTALLED" ]]; then
-      if ! check_module_dependencies "$module" false; then  # false = don't show debug in terminal
+      # Check environment compatibility first
+      if ! is_module_environment_compatible "$module"; then
+        status="ENVIRONMENT_INCOMPATIBLE"
+      elif ! check_module_dependencies "$module" false; then  # false = don't show debug in terminal
         status="DEPENDENCIES_MISSING"
       else
         status="NOT_INSTALLED"
@@ -473,6 +583,11 @@ show_module_menu() {
       "DEPENDENCIES_MISSING")
         status_icon="⚠️"
         status_text="\033[1;33m[DEPENDENCIES MISSING]\033[0m"
+        ;;
+      "ENVIRONMENT_INCOMPATIBLE")
+        status_icon="🚫"
+        local module_env="${MODULE_METADATA["${module}:environment"]:-both}"
+        status_text="\033[1;35m[INCOMPATIBLE - $module_env only]\033[0m"
         ;;
       *)
         status_icon="⚪"  
@@ -500,6 +615,7 @@ show_module_menu() {
     
     # Always show module information (previously only in debug mode)
     local backup_required="${MODULE_METADATA["${module}:backup_required"]:-false}"
+    local module_environment="${MODULE_METADATA["${module}:environment"]:-both}"
     local backup_icon=""
     if [[ "$backup_required" == "true" ]]; then
       backup_icon="💾"
@@ -507,8 +623,17 @@ show_module_menu() {
       backup_icon="📝"
     fi
     
-    printf "      \033[0;90m└─ Name: %s | Version: %s | Category: %s | Backup: %s %s\033[0m\n" \
-           "$module_display_name" "$module_version" "$module_category" "$backup_icon" "$backup_required"
+    # Environment compatibility icon
+    local env_icon=""
+    case "$module_environment" in
+      "host")   env_icon="🖥️" ;;
+      "docker") env_icon="🐳" ;;
+      "both")   env_icon="🔄" ;;
+      *)        env_icon="❓" ;;
+    esac
+    
+    printf "      \033[0;90m└─ Name: %s | Version: %s | Category: %s | Environment: %s %s | Backup: %s %s\033[0m\n" \
+           "$module_display_name" "$module_version" "$module_category" "$env_icon" "$module_environment" "$backup_icon" "$backup_required"
     
     # Show dependency information
     local dependencies_str="${MODULE_METADATA["${module}:dependencies"]:-}"
@@ -610,6 +735,7 @@ discover_modules() {
         MODULE_METADATA["${filename}:category"]="${MODULE_CATEGORY:-other}"
         MODULE_METADATA["${filename}:timeout"]="${MODULE_TIMEOUT:-$OPTIMIZER_TIMEOUT_DURATION}"
         MODULE_METADATA["${filename}:reboot"]="${MODULE_REQUIRES_REBOOT:-false}"
+        MODULE_METADATA["${filename}:environment"]="${MODULE_ENVIRONMENT:-both}"
         MODULE_METADATA["${filename}:author"]="${MODULE_AUTHOR:-Unknown}"
         MODULE_METADATA["${filename}:impact"]="${MODULE_GAME_IMPACT:-No information available}"
         MODULE_METADATA["${filename}:documentation_url"]="${MODULE_DOCUMENTATION_URL:-Not specified}"
@@ -664,7 +790,7 @@ discover_modules() {
     
     # Clean up variables for next iteration
     unset MODULE_NAME MODULE_DESCRIPTION MODULE_VERSION MODULE_CATEGORY
-    unset MODULE_TIMEOUT MODULE_REQUIRES_REBOOT MODULE_DEPENDENCIES MODULE_REQUIRED_PACKAGES
+    unset MODULE_TIMEOUT MODULE_REQUIRES_REBOOT MODULE_ENVIRONMENT MODULE_DEPENDENCIES MODULE_REQUIRED_PACKAGES
     unset MODULE_SUPPORTED_OS MODULE_SUPPORTED_VERSIONS MODULE_AUTHOR MODULE_DOCUMENTATION_URL
     unset MODULE_GAME_IMPACT MODULE_REQUIRES_BACKUP MODULE_BACKUP_FILES MODULE_BACKUP_COMMANDS
     unset MODULE_ENV_VARIABLES
@@ -715,6 +841,29 @@ execute_module() {
   if [[ ! -x "$module_path" ]]; then
     debug_log "EXECUTION" "Module $module_path lacks execution permission" "execute_module"
     log_message "$module_name" "ERROR" "No execution permission"
+    save_module_status "$module_name" "FAILED" "$(date '+%Y-%m-%d %H:%M:%S')"
+    return 1
+  fi
+  
+  # Check environment compatibility before execution
+  debug_log "EXECUTION" "Checking environment compatibility for module: $module_file" "execute_module"
+  if ! is_module_environment_compatible "$module_file"; then
+    local module_env="${MODULE_METADATA["${module_file}:environment"]:-both}"
+    local current_env="host"
+    if [[ "$(detect_docker_environment)" == "true" ]]; then
+      current_env="docker"
+    fi
+    
+    printf "\n"
+    printf "\033[1;31m🚫 ENVIRONMENT COMPATIBILITY CHECK FAILED\033[0m\n"
+    printf "\033[1;33m📋 Current environment: %s\033[0m\n" "$current_env"
+    printf "\033[1;33m📋 Module requires: %s\033[0m\n" "$module_env"
+    printf "   This module is not designed to run in the current environment.\n"
+    printf "\n"
+    read -p "Press ENTER to continue..."
+    
+    debug_log "EXECUTION" "Environment incompatibility for $module_name: current=$current_env, required=$module_env" "execute_module"
+    log_message "$module_name" "ERROR" "Environment incompatible: current=$current_env, required=$module_env"
     save_module_status "$module_name" "FAILED" "$(date '+%Y-%m-%d %H:%M:%S')"
     return 1
   fi
@@ -1057,6 +1206,39 @@ show_modules_info() {
     else
       printf "\033[1;32m✅ No\033[0m\n"
     fi
+    
+    # Environment compatibility
+    local module_environment="${MODULE_METADATA["${module}:environment"]:-both}"
+    local current_env="host"
+    if [[ "$(detect_docker_environment)" == "true" ]]; then
+      current_env="docker"
+    fi
+    
+    printf "  • \033[1;37mEnvironment Support:\033[0m "
+    case "$module_environment" in
+      "host")
+        printf "\033[1;32m🖥️  Host Only\033[0m"
+        if [[ "$current_env" == "docker" ]]; then
+          printf " \033[1;31m(⚠️  Not compatible with current Docker environment)\033[0m"
+        fi
+        printf "\n"
+        ;;
+      "docker")
+        printf "\033[1;36m🐳 Docker Only\033[0m"
+        if [[ "$current_env" == "host" ]]; then
+          printf " \033[1;31m(⚠️  Not compatible with current host environment)\033[0m"
+        fi
+        printf "\n"
+        ;;
+      "both")
+        printf "\033[1;32m🔄 Both Host and Docker\033[0m"
+        printf " \033[1;32m(✅ Compatible with current %s environment)\033[0m" "$current_env"
+        printf "\n"
+        ;;
+      *)
+        printf "\033[1;90m❓ Unknown (%s)\033[0m\n" "$module_environment"
+        ;;
+    esac
     
     # Backup configuration
     printf "  • \033[1;37mBackup System:\033[0m "

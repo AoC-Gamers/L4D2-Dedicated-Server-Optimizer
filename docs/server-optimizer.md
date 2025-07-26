@@ -234,7 +234,93 @@ esac
    save_module_status "$module_name" "INSTALLED" "$(date)"
    ```
 
-## 🐛 Sistema de Debug y Logging
+## � Compatibilidad con Entornos Docker
+
+### Detección Automática de Entorno
+
+El sistema detecta automáticamente si está ejecutándose dentro de un contenedor Docker o en un sistema host:
+
+```bash
+# Métodos de detección utilizados:
+# 1. Verificación de archivo /.dockerenv
+# 2. Análisis de /proc/1/cgroup para patrones de Docker
+# 3. Variables de entorno container o DOCKER_CONTAINER
+# 4. Comando systemd-detect-virt (si está disponible)
+```
+
+### Configuración de Compatibilidad en Módulos
+
+Los módulos pueden especificar su compatibilidad de entorno mediante la variable `MODULE_ENVIRONMENT`:
+
+```bash
+# En la función register_module() del módulo:
+MODULE_ENVIRONMENT="host"    # Solo sistemas host (bare metal/VM)
+MODULE_ENVIRONMENT="docker"  # Solo contenedores Docker
+MODULE_ENVIRONMENT="both"    # Compatible con ambos entornos
+```
+
+### Comportamiento del Sistema
+
+#### En Entorno Host
+- **Indicador**: 🖥️ HOST ENVIRONMENT DETECTED - All modules available
+- **Disponibilidad**: Todos los módulos están disponibles
+- **Optimizaciones**: Se aplican configuraciones a nivel de kernel del sistema
+
+#### En Entorno Docker
+- **Indicador**: 🐳 DOCKER ENVIRONMENT DETECTED
+- **Filtrado**: Muestra advertencia sobre módulos incompatibles
+- **Limitaciones**: Solo ejecuta módulos marcados como "docker" o "both"
+
+#### Información en el Menú
+```bash
+# El menú muestra información de compatibilidad para cada módulo:
+Environment: 🖥️ host | 🐳 docker | 🔄 both
+
+# Estados posibles de módulos:
+[INSTALLED]               # Módulo ejecutado exitosamente
+[FAILED]                  # Módulo falló durante ejecución  
+[DEPENDENCIES MISSING]    # Faltan dependencias requeridas
+[INCOMPATIBLE - host only] # Módulo no compatible con entorno actual
+```
+
+### Recomendaciones para Servidores Dockerizados
+
+#### Optimizaciones del Host (Obligatorias)
+Los siguientes módulos **DEBEN ejecutarse en el sistema host** ya que Docker comparte el kernel:
+
+- **Red**: `network_base.sh`, `network_advanced.sh`, `tcp_udp_params.sh`
+- **Memoria**: `swap_opt.sh`, `thp_disable.sh`  
+- **CPU/IRQ**: `irq_opt.sh`
+- **Disco I/O**: `disk_opt.sh`
+
+#### Optimizaciones del Contenedor (Opcionales)
+Estos módulos pueden ejecutarse dentro del contenedor si es necesario:
+
+- **DNS**: `dns_optimizer.sh` (puede configurarse independientemente)
+- **IPv6**: `ipv6_disable.sh` (requiere privilegios de contenedor)
+
+#### Configuración Docker Recomendada
+```bash
+# Para máximo rendimiento en gaming servers:
+docker run --privileged --network=host \
+  --name l4d2-server game-image
+
+# Las optimizaciones del host benefician automáticamente
+# todos los contenedores en el sistema
+```
+
+### Ejemplo de Ejecución
+
+```bash
+# En sistema host - todos los módulos disponibles
+🖥️ HOST ENVIRONMENT DETECTED - All modules available
+
+# En contenedor Docker - algunos módulos no disponibles  
+🐳 DOCKER ENVIRONMENT DETECTED
+⚠️  7 modules are not available in Docker containers
+```
+
+## �🐛 Sistema de Debug y Logging
 
 ### Niveles de Logging
 

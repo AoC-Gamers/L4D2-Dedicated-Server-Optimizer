@@ -12,6 +12,7 @@ register_module() {
   MODULE_CATEGORY="network"
   MODULE_TIMEOUT=60
   MODULE_REQUIRES_REBOOT=false
+  MODULE_ENVIRONMENT="both"
   MODULE_AUTHOR="L4D2 Optimizer Team"
   MODULE_GAME_IMPACT="Improves server connectivity and reduced latency for network operations. May reduce lag spikes caused by DNS lookups."
   MODULE_DOCUMENTATION_URL="https://github.com/AoC-Gamers/L4D2-Optimizer"

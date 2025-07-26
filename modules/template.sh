@@ -23,6 +23,13 @@ register_module() {
   MODULE_TIMEOUT=30  # Override global timeout in seconds (default: 180)
   MODULE_REQUIRES_REBOOT=false  # Set to true if system reboot is required after execution
   
+  # Environment Compatibility (REQUIRED)
+  # Options: "host", "docker", "both"
+  # - "host": Only runs on host systems (bare metal/VM)
+  # - "docker": Only runs inside Docker containers  
+  # - "both": Can run in both environments
+  MODULE_ENVIRONMENT="both"
+  
   # Dependencies and Requirements (OPTIONAL - leave empty arrays if none)
   MODULE_DEPENDENCIES=()  # Array of required modules (by MODULE_NAME)
   MODULE_REQUIRED_PACKAGES=()  # Array of required system packages (e.g., "curl" "wget")
@@ -213,6 +220,65 @@ perform_module_backup() {
 }
 
 # =============================================================================
+# ENVIRONMENT DETECTION FUNCTIONS
+# =============================================================================
+
+# Function to detect if running inside Docker container
+detect_docker_environment() {
+  local is_docker=false
+  
+  # Method 1: Check for .dockerenv file
+  if [[ -f /.dockerenv ]]; then
+    is_docker=true
+  fi
+  
+  # Method 2: Check cgroup for docker
+  if [[ -f /proc/1/cgroup ]] && grep -q docker /proc/1/cgroup 2>/dev/null; then
+    is_docker=true
+  fi
+  
+  # Method 3: Check for container environment variable
+  if [[ -n "${container:-}" ]] || [[ -n "${DOCKER_CONTAINER:-}" ]]; then
+    is_docker=true
+  fi
+  
+  # Method 4: Check systemd-detect-virt if available
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    if systemd-detect-virt --container >/dev/null 2>&1; then
+      is_docker=true
+    fi
+  fi
+  
+  echo "$is_docker"
+}
+
+# Function to check if module is compatible with current environment
+is_module_environment_compatible() {
+  local module_environment="$1"
+  local current_env
+  
+  # Detect current environment
+  if [[ "$(detect_docker_environment)" == "true" ]]; then
+    current_env="docker"
+  else
+    current_env="host"
+  fi
+  
+  # Check compatibility
+  case "$module_environment" in
+    "both")
+      return 0  # Compatible with both
+      ;;
+    "$current_env")
+      return 0  # Compatible with current environment
+      ;;
+    *)
+      return 1  # Not compatible
+      ;;
+  esac
+}
+
+# =============================================================================
 # MODULE EXECUTION LOGIC (REQUIRED)
 # =============================================================================
 # This section contains the actual optimization code
@@ -236,6 +302,31 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   log_message "$MODULE_NAME" "INFO" "=== Starting Prototype Template Execution ==="
   log_message "$MODULE_NAME" "INFO" "This is a development template - no real changes will be made"
   
+  # STEP 0: Check environment compatibility
+  log_message "$MODULE_NAME" "INFO" "Checking environment compatibility..."
+  
+  # Load module metadata
+  register_module
+  
+  # Detect current environment
+  local is_docker=$(detect_docker_environment)
+  local current_env="host"
+  if [[ "$is_docker" == "true" ]]; then
+    current_env="docker"
+  fi
+  
+  log_message "$MODULE_NAME" "INFO" "Current environment: $current_env"
+  log_message "$MODULE_NAME" "INFO" "Module supports: ${MODULE_ENVIRONMENT:-both}"
+  
+  # Check compatibility
+  if ! is_module_environment_compatible "${MODULE_ENVIRONMENT:-both}"; then
+    log_message "$MODULE_NAME" "ERROR" "Module not compatible with $current_env environment"
+    log_message "$MODULE_NAME" "ERROR" "This module is designed for: ${MODULE_ENVIRONMENT:-both}"
+    exit 1
+  fi
+  
+  log_message "$MODULE_NAME" "SUCCESS" "Environment compatibility check passed"
+  
   # STEP 1: Create backup before making any changes (if required)
   if [[ "${MODULE_REQUIRES_BACKUP:-false}" == "true" ]]; then
     log_message "$MODULE_NAME" "INFO" "Creating backup before applying optimizations..."
@@ -253,9 +344,18 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   log_message "$MODULE_NAME" "INFO" "Validating configuration parameters..."
   sleep 1
   
-  # STEP 4: Apply optimization settings
-  log_message "$MODULE_NAME" "INFO" "Applying optimization settings..."
-  sleep 1
+  # STEP 4: Apply optimization settings (environment-aware)
+  log_message "$MODULE_NAME" "INFO" "Applying optimization settings for $current_env environment..."
+  
+  if [[ "$current_env" == "docker" ]]; then
+    log_message "$MODULE_NAME" "INFO" "Running Docker-specific optimizations..."
+    # Docker-specific logic here
+    sleep 1
+  else
+    log_message "$MODULE_NAME" "INFO" "Running host-specific optimizations..."  
+    # Host-specific logic here
+    sleep 1
+  fi
   
   # STEP 5: Verify changes
   log_message "$MODULE_NAME" "INFO" "Verifying changes..."

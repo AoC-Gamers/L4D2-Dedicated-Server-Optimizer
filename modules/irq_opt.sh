@@ -13,6 +13,7 @@ register_module() {
   MODULE_CATEGORY="cpu"
   MODULE_TIMEOUT=60
   MODULE_REQUIRES_REBOOT=false
+  MODULE_ENVIRONMENT="host"
   MODULE_DEPENDENCIES=()
   MODULE_REQUIRED_PACKAGES=("irqbalance")
   MODULE_SUPPORTED_SYSTEMS=("debian,11" "debian,12" "ubuntu,20.04" "ubuntu,22.04" "ubuntu,24.04")
