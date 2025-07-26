@@ -117,6 +117,25 @@ sudo ./server-optimizer.sh
   - Habilita Receive Packet Steering (RPS)
   - *Impacto*: Distribuye interrupciones de red para mejor utilización de CPU multinúcleo
 
+### 🐳 Docker (Contenedores)
+- **`docker_processes.sh`** - Optimización de Procesos en Contenedores
+  - Prioriza procesos L4D2/srcds con nice -20 (máxima prioridad CPU)
+  - Configura I/O real-time para procesos del juego
+  - Monitoreo continuo y re-priorización automática
+  - *Impacto*: Garantiza máxima prioridad para el servidor del juego, reduce micro-stutters en 100 tick
+
+- **`docker_filesystem.sh`** - Optimización de Sistema de Archivos en Contenedores
+  - Utiliza tmpfs (RAM) para logs, demos y cache temporal
+  - Optimiza parámetros I/O del kernel dentro del contenedor
+  - Sistema automático de limpieza y rotación de archivos
+  - *Impacto*: Elimina latencia de disco en operaciones críticas, mejora tiempos de carga
+
+- **`docker_networking.sh`** - Optimización de Red en Contenedores
+  - Buffers TCP/UDP optimizados para gaming (16MB)
+  - TCP_NODELAY y BBR congestion control
+  - Desactiva hardware offloading para menor latencia
+  - *Impacto*: Reduce latencia de red 5-15ms, mejora estabilidad de hitreg en 100 tick
+
 ## 🔧 Configuración Avanzada
 
 ### Variables de Entorno
@@ -129,6 +148,11 @@ NETWORK_TCP_CONGESTION="bbr"               # Control de congestión TCP
 NETWORK_MTU_SIZE="1500"                    # Tamaño MTU
 MEMORY_SWAPPINESS="10"                     # Tendencia a usar swap
 DISK_SCHEDULER="mq-deadline"               # Scheduler I/O
+
+# Configuración específica para Docker
+DOCKER_PROCESS_SRCDS_NICE="-20"            # Prioridad máxima para srcds
+DOCKER_FS_TMPFS_SIZE="512M"                # Tamaño tmpfs para cache
+DOCKER_NET_BUFFER_SIZE="16777216"          # Buffers de red (16MB)
 ```
 
 ### Sistema de Respaldos
@@ -174,6 +198,11 @@ El sistema incluye un `template.sh` que facilita la creación de nuevos módulos
 - [`docs/network_base.md`](docs/network_base.md) - Network Base - Configuración fundamental de buffers y parámetros de red
 - [`docs/swap_opt.md`](docs/swap_opt.md) - Swap Optimization - Optimización de memoria virtual y swappiness
 - [`docs/tcp_udp_params.md`](docs/tcp_udp_params.md) - TCP/UDP Parameters - Optimización de protocolos TCP y UDP
+
+#### 🐳 Módulos para Contenedores Docker
+- [`docs/docker_processes.md`](docs/docker_processes.md) - Docker Process Optimization - Priorización de procesos L4D2 en contenedores
+- [`docs/docker_filesystem.md`](docs/docker_filesystem.md) - Docker Filesystem Optimization - Sistema de archivos optimizado con tmpfs
+- [`docs/docker_networking.md`](docs/docker_networking.md) - Docker Network Optimization - Stack de red containerizada para gaming
 
 ## 🐛 Depuración y Logs
 
