@@ -6,7 +6,7 @@
 # Uses timeout to avoid module blocking.
 
 # Default configuration values (can be overridden by .env file)
-OPTIMIZER_DEBUG=1
+OPTIMIZER_DEBUG=0
 OPTIMIZER_TIMEOUT_DURATION=180  # seconds per module
 
 # Configuration directories (system-wide - requires root privileges)
