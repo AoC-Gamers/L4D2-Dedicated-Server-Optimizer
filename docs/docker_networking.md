@@ -180,7 +180,6 @@ DOCKER_NET_BUFFER_SIZE="67108864"        # 64MB para tráfico extremo
 DOCKER_NET_ENABLE_FASTOPEN="true"        # Crítico para latencia
 DOCKER_NET_OPTIMIZE_QUEUES="true"        # Optimización máxima
 DOCKER_NET_DISABLE_OFFLOAD="true"        # Prioridad total a latencia
-DOCKER_NET_NETDEV_BACKLOG="7500"         # Mayor cola para ráfagas
 ```
 
 ## Impacto en el Rendimiento

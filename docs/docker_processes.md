@@ -36,7 +36,6 @@ DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
 DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
 DOCKER_PROCESS_OTHER_NICE="19"       # Mínima prioridad para otros
 DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo intensivo
-DOCKER_PROCESS_RT_INTERVAL="15"      # Verificación cada 15 segundos
 ```
 
 ## ¿Por qué es Necesario?

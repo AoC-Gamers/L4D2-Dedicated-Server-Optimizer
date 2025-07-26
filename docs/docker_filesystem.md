@@ -36,7 +36,6 @@ DOCKER_FS_TMPFS_SIZE="2G"            # Máximo espacio para rendimiento extremo
 DOCKER_FS_ENABLE_TMPFS="true"        # Crítico para latencia
 DOCKER_FS_OPTIMIZE_LOGS="true"       # Rotación muy agresiva
 DOCKER_FS_DEMO_TMPFS="true"          # Demos en RAM de alta velocidad
-DOCKER_FS_CLEANUP_INTERVAL="15"      # Limpieza más frecuente
 ```
 
 ## ¿Por qué es Necesario?
@@ -78,11 +77,6 @@ El almacenamiento en disco tradicional, incluso SSDs, introduce latencias que pu
 - `DOCKER_FS_DEMO_TMPFS`: Usar tmpfs específicamente para demos
 - `DOCKER_FS_OPTIMIZE_LOGS`: Aplicar optimizaciones de logging
 
-### Variables de Tunning
-- `DOCKER_FS_CLEANUP_INTERVAL`: Intervalo de limpieza automática (minutos)
-- `DOCKER_FS_MAX_CACHE_SIZE`: Tamaño máximo del cache antes de limpieza
-- `DOCKER_FS_LOG_RETENTION`: Días de retención de logs
-
 ## Configuración por Escenario
 
 ### Servidor de Torneo (100 tick, múltiples matches)
@@ -91,8 +85,6 @@ DOCKER_FS_ENABLE_TMPFS="true"
 DOCKER_FS_TMPFS_SIZE="2G"
 DOCKER_FS_DEMO_TMPFS="true"
 DOCKER_FS_OPTIMIZE_LOGS="true"
-DOCKER_FS_CLEANUP_INTERVAL="10"
-DOCKER_FS_MAX_CACHE_SIZE="200M"
 ```
 
 ### Servidor de Práctica (60 tick, ocasional)
@@ -101,8 +93,6 @@ DOCKER_FS_ENABLE_TMPFS="true"
 DOCKER_FS_TMPFS_SIZE="512M"
 DOCKER_FS_DEMO_TMPFS="false"
 DOCKER_FS_OPTIMIZE_LOGS="false"
-DOCKER_FS_CLEANUP_INTERVAL="60"
-DOCKER_FS_MAX_CACHE_SIZE="100M"
 ```
 
 ## Implementación Técnica
