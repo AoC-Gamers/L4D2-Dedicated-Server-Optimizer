@@ -1,6 +1,10 @@
-# DoEl módulo **Docker Process Optimization** (`docker_processes.sh`) está específicament### Configuración Recomendada por Escenario
+# Docker Process Optimization Module
 
-### Uso según Tipo de Servidor
+## Descripción General
+
+El módulo **Docker Process Optimization** (`docker_processes.sh`) está específicamente diseñado para optimizar las prioridades de procesos dentro de contenedores Docker que ejecutan servidores L4D2 competitivos. Este módulo se enfoca en garantizar que los procesos del servidor de juego reciban la máxima prioridad del sistema, mientras que otros procesos del contenedor se ejecutan con menor prioridad.
+
+## Uso según Tipo de Servidor
 
 #### Servidor Competitivo (100 tick, 8-16 jugadores)
 ```bash
@@ -16,15 +20,7 @@ DOCKER_PROCESS_SRCDS_NICE="-10"      # Alta prioridad
 DOCKER_PROCESS_SRCDS_IONICE="2"      # I/O best-effort
 DOCKER_PROCESS_OTHER_NICE="5"        # Prioridad moderada
 DOCKER_PROCESS_ENABLE_RT="false"     # Sin monitoreo continuo
-```ptimizar las prioridades de procesos dentro de contenedores Docker que ejecutan servidores L4D2 competitivos. Este módulo se enfoca en garantizar que los procesos del servidor de juego reciban la máxima prioridad del sistema, mientras que otros procesos del contenedor se ejecutan con menor prioridad.
-
-## ¿Por qué es Necesario?
-
-En servidores L4D2 competitivos con alto tickrate (100 tick) y 8-16 jugadores simultáneos, cada microsegundo cuenta. Los contenedores Docker, por defecto, tratan todos los procesos con igual prioridad, lo que puede causar:Process Optimization Module
-
-## Descripción General
-
-El módulo **Docker Process Optimization** (`docker_processes.sh`) está específicamente diseñado para optimizar las prioridades de procesos dentro de contenedores Docker que ejecutan servidores L4D2 competitivos. Este módulo se enfoca en garantizar que los procesos del servidor de juego reciban la máxima prioridad del sistema, mientras que otros procesos del contenedor se ejecutan con menor prioridad.
+```
 
 ## ¿Por qué es Necesario?
 
