@@ -252,8 +252,8 @@ detect_docker_environment() {
   echo "$is_docker"
 }
 
-# Function to check if module is compatible with current environment
-is_module_environment_compatible() {
+# Function to check if module is compatible with current environment (LOCAL VERSION)
+template_is_module_environment_compatible() {
   local module_environment="$1"
   local current_env
   
@@ -319,7 +319,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   log_message "$MODULE_NAME" "INFO" "Module supports: ${MODULE_ENVIRONMENT:-both}"
   
   # Check compatibility
-  if ! is_module_environment_compatible "${MODULE_ENVIRONMENT:-both}"; then
+  if ! template_is_module_environment_compatible "${MODULE_ENVIRONMENT:-both}"; then
     log_message "$MODULE_NAME" "ERROR" "Module not compatible with $current_env environment"
     log_message "$MODULE_NAME" "ERROR" "This module is designed for: ${MODULE_ENVIRONMENT:-both}"
     exit 1

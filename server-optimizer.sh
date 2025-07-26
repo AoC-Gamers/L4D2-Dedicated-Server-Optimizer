@@ -9,9 +9,6 @@
 OPTIMIZER_DEBUG=1
 OPTIMIZER_TIMEOUT_DURATION=180  # seconds per module
 
-# Predefined module categories
-declare -a VALID_CATEGORIES=("memory" "network" "disk" "cpu" "security" "system" "gaming" "other")
-
 # Configuration directories (system-wide - requires root privileges)
 # Default values - can be overridden by .env file
 OPTIMIZER_CONFIG_DIR="/etc/l4d2-optimizer"
@@ -20,8 +17,6 @@ OPTIMIZER_LOG_DIR="/var/log/l4d2-optimizer"
 
 # Configuration files
 STATUS_FILE="$OPTIMIZER_DATA_DIR/module_status"
-CONFIG_FILE="$OPTIMIZER_CONFIG_DIR/optimizer.conf"
-LOG_FILE="$OPTIMIZER_LOG_DIR/optimizer.log"
 DEBUG_LOG_FILE="$OPTIMIZER_LOG_DIR/debug.log"
 
 # Dynamic modules arrays (will be populated by discover_modules function)
@@ -36,6 +31,12 @@ log_message() {
   local module="$1"
   local type="$2"
   local message="$3"
+  
+  # Handle DEBUG type specially - use debug_log instead of echo
+  if [[ "$type" == "DEBUG" ]]; then
+    debug_log "$module" "$message" "main" "false"
+    return
+  fi
   
   case "$type" in
     INFO)    echo "ℹ️  [$module] $message" ;;
@@ -52,7 +53,7 @@ debug_log() {
   local module="$1"
   local message="$2"
   local function_name="${3:-main}"
-  local show_terminal="${4:-true}"  # Default: show in terminal
+  local show_terminal="${4:-false}"  # Default: do NOT show in terminal
   
   # Only log if DEBUG mode is enabled
   if [[ "$OPTIMIZER_DEBUG" == "1" ]]; then
@@ -65,12 +66,12 @@ debug_log() {
       mkdir -p "$debug_dir" 2>/dev/null
     fi
     
-    # Write to debug log file
+    # Write to debug log file (always, no terminal interference)
     echo "$log_entry" >> "$DEBUG_LOG_FILE" 2>/dev/null
     
-    # Also show on terminal if enabled and show_terminal is true
+    # ONLY show on terminal if explicitly requested and it's safe to do so
     if [[ "$show_terminal" == "true" ]]; then
-      echo "🐛 [DEBUG] [$module:$function_name] $message"
+      echo "🐛 [DEBUG] [$module:$function_name] $message" >&2
     fi
   fi
 }
@@ -147,26 +148,9 @@ if [[ -f "$ENV_FILE" ]]; then
   
   debug_log "CONFIG" "Environment configuration loaded successfully" "load_env"
   echo "✅ Environment configuration loaded successfully"
-  
-  # Maintain backward compatibility by setting old variable names
-  # This ensures existing modules continue to work during transition
-  DEBUG="$OPTIMIZER_DEBUG"
-  TIMEOUT_DURATION="$OPTIMIZER_TIMEOUT_DURATION"
-  CONFIG_DIR="$OPTIMIZER_CONFIG_DIR"
-  DATA_DIR="$OPTIMIZER_DATA_DIR" 
-  LOG_DIR="$OPTIMIZER_LOG_DIR"
-  
-  debug_log "CONFIG" "Backward compatibility variables set" "load_env"
 else
   debug_log "CONFIG" "No .env file found at $ENV_FILE, using defaults" "load_env"
   echo "ℹ️  No .env file found, using default configuration"
-  
-  # Set backward compatibility variables with defaults
-  DEBUG="$OPTIMIZER_DEBUG"
-  TIMEOUT_DURATION="$OPTIMIZER_TIMEOUT_DURATION"
-  CONFIG_DIR="$OPTIMIZER_CONFIG_DIR"
-  DATA_DIR="$OPTIMIZER_DATA_DIR"
-  LOG_DIR="$OPTIMIZER_LOG_DIR"
 fi
 
 # Set MODULE_DIR after BASE_DIR is defined
@@ -415,74 +399,62 @@ get_missing_dependencies() {
 # DOCKER ENVIRONMENT DETECTION FUNCTIONS
 # =============================================================================
 
-# Function to detect if running inside Docker container
-detect_docker_environment() {
-  local is_docker=false
-  
-  # Method 1: Check for .dockerenv file
+# Centralized function to detect current environment
+detect_current_environment() {
+  local current_env="host"
   if [[ -f /.dockerenv ]]; then
-    is_docker=true
+    current_env="docker"
+  elif [[ -f /proc/1/cgroup ]] && grep -q docker /proc/1/cgroup 2>/dev/null; then
+    current_env="docker"
   fi
-  
-  # Method 2: Check cgroup for docker
-  if [[ -f /proc/1/cgroup ]] && grep -q docker /proc/1/cgroup 2>/dev/null; then
-    is_docker=true
-  fi
-  
-  # Method 3: Check for container environment variable
-  if [[ -n "${container:-}" ]] || [[ -n "${DOCKER_CONTAINER:-}" ]]; then
-    is_docker=true
-  fi
-  
-  # Method 4: Check systemd-detect-virt if available
-  if command -v systemd-detect-virt >/dev/null 2>&1; then
-    if systemd-detect-virt --container >/dev/null 2>&1; then
-      is_docker=true
-    fi
-  fi
-  
-  echo "$is_docker"
+  echo "$current_env"
 }
 
 # Function to check if module is compatible with current environment
 is_module_environment_compatible() {
   local module_file="$1"
-  local module_environment="${MODULE_METADATA["${module_file}:environment"]:-both}"
-  local current_env
   
-  # Detect current environment
-  if [[ "$(detect_docker_environment)" == "true" ]]; then
-    current_env="docker"
-  else
-    current_env="host"
+  # Validate input
+  if [[ -z "$module_file" ]]; then
+    echo "ERROR: is_module_environment_compatible called without module_file" >&2
+    return 1
+  fi
+  
+  # Get module environment requirement with explicit default
+  local module_environment="${MODULE_METADATA["${module_file}:environment"]}"
+  if [[ -z "$module_environment" ]]; then
+    module_environment="both"
+  fi
+  
+  # Detect current environment using centralized function
+  local current_env=$(detect_current_environment)
+  
+  # Clean strings to handle any encoding issues
+  local clean_module_env=$(printf '%s' "$module_environment" | tr -cd '[:alnum:]')
+  local clean_current_env=$(printf '%s' "$current_env" | tr -cd '[:alnum:]')
+  
+  # Debug output (only when debug is enabled)
+  if [[ "$OPTIMIZER_DEBUG" == "1" ]]; then
+    echo "[COMPAT] module=$module_file | module_env='$clean_module_env' | current_env='$clean_current_env'" >&2
   fi
   
   # Check compatibility
-  case "$module_environment" in
-    "both")
-      return 0  # Compatible with both
-      ;;
-    "$current_env")
-      return 0  # Compatible with current environment
-      ;;
-    *)
-      return 1  # Not compatible
-      ;;
-  esac
+  if [[ "$clean_module_env" == "both" ]]; then
+    [[ "$OPTIMIZER_DEBUG" == "1" ]] && echo "[COMPAT] COMPATIBLE (supports both environments)" >&2
+    return 0
+  elif [[ "$clean_module_env" == "$clean_current_env" ]]; then
+    [[ "$OPTIMIZER_DEBUG" == "1" ]] && echo "[COMPAT] COMPATIBLE (exact match)" >&2
+    return 0
+  else
+    [[ "$OPTIMIZER_DEBUG" == "1" ]] && echo "[COMPAT] INCOMPATIBLE ('$clean_module_env' != '$clean_current_env')" >&2
+    return 1
+  fi
 }
 
 # Function to get environment-incompatible modules count and list
 get_environment_incompatible_info() {
   local incompatible_count=0
   local incompatible_list=()
-  local current_env
-  
-  # Detect current environment
-  if [[ "$(detect_docker_environment)" == "true" ]]; then
-    current_env="docker"
-  else
-    current_env="host"
-  fi
   
   # Check each module for compatibility
   for module in "${MODULE_ORDER[@]}"; do
@@ -498,7 +470,10 @@ get_environment_incompatible_info() {
 
 # Function to show banner
 show_banner() {
-  clear
+  # Don't clear screen in debug mode to preserve debug messages
+  if [[ "$OPTIMIZER_DEBUG" != "1" ]]; then
+    clear
+  fi
   printf "\n\033[1;36m╔══════════════════════════════════════════════════════════════╗\n"
   printf "║                                                              ║\n"
   printf "║           🎮 L4D2 DEDICATED SERVER OPTIMIZER 🎮              ║\n"
@@ -519,9 +494,9 @@ show_module_menu() {
   fi
   
   # Show Docker environment information
-  local is_docker=$(detect_docker_environment)
-  local current_env="host"
-  if [[ "$is_docker" == "true" ]]; then
+  local current_env=$(detect_current_environment)
+  
+  if [[ "$current_env" == "docker" ]]; then
     current_env="docker"
     printf "\033[1;36m🐳 DOCKER ENVIRONMENT DETECTED\033[0m\n"
     
@@ -558,6 +533,8 @@ show_module_menu() {
     local module_description="${MODULE_METADATA["${module}:description"]:-No description}"
     local module_category="${MODULE_METADATA["${module}:category"]:-other}"
     local module_version="${MODULE_METADATA["${module}:version"]:-1.0.0}"
+    local module_timeout="${MODULE_METADATA["${module}:timeout"]:-$OPTIMIZER_TIMEOUT_DURATION}"
+    local module_author="${MODULE_METADATA["${module}:author"]:-Unknown}"
     
     # Check dependencies and environment compatibility before determining status
     if [[ "$status" == "NOT_INSTALLED" ]] || [[ "$status" == "NOT INSTALLED" ]]; then
@@ -703,10 +680,10 @@ discover_modules() {
     
     debug_log "SYSTEM" "Processing file: $filename" "discover_modules"
     
-    # Skip prototype in production mode
-    if [[ "$filename" == "prototype_template.sh" && "$OPTIMIZER_DEBUG" != "1" ]]; then
-      debug_log "SYSTEM" "Skipping prototype_template.sh (OPTIMIZER_DEBUG=$OPTIMIZER_DEBUG)" "discover_modules"
-      log_message "SYSTEM" "INFO" "Skipping prototype_template.sh (OPTIMIZER_DEBUG=0)"
+    # Skip prototype templates in production mode
+    if [[ "$filename" =~ template\.sh$ && "$OPTIMIZER_DEBUG" != "1" ]]; then
+      debug_log "SYSTEM" "Skipping template file $filename (OPTIMIZER_DEBUG=$OPTIMIZER_DEBUG)" "discover_modules"
+      log_message "SYSTEM" "INFO" "Skipping template file $filename (production mode)"
       continue
     fi
     
@@ -791,9 +768,8 @@ discover_modules() {
     # Clean up variables for next iteration
     unset MODULE_NAME MODULE_DESCRIPTION MODULE_VERSION MODULE_CATEGORY
     unset MODULE_TIMEOUT MODULE_REQUIRES_REBOOT MODULE_ENVIRONMENT MODULE_DEPENDENCIES MODULE_REQUIRED_PACKAGES
-    unset MODULE_SUPPORTED_OS MODULE_SUPPORTED_VERSIONS MODULE_AUTHOR MODULE_DOCUMENTATION_URL
-    unset MODULE_GAME_IMPACT MODULE_REQUIRES_BACKUP MODULE_BACKUP_FILES MODULE_BACKUP_COMMANDS
-    unset MODULE_ENV_VARIABLES
+    unset MODULE_AUTHOR MODULE_DOCUMENTATION_URL MODULE_GAME_IMPACT 
+    unset MODULE_REQUIRES_BACKUP MODULE_BACKUP_FILES MODULE_BACKUP_COMMANDS MODULE_ENV_VARIABLES
     
   done < <(find "$MODULE_DIR" -name "*.sh" -type f -print0 | sort -z)
   
@@ -847,12 +823,10 @@ execute_module() {
   
   # Check environment compatibility before execution
   debug_log "EXECUTION" "Checking environment compatibility for module: $module_file" "execute_module"
+  
   if ! is_module_environment_compatible "$module_file"; then
     local module_env="${MODULE_METADATA["${module_file}:environment"]:-both}"
-    local current_env="host"
-    if [[ "$(detect_docker_environment)" == "true" ]]; then
-      current_env="docker"
-    fi
+    local current_env=$(detect_current_environment)
     
     printf "\n"
     printf "\033[1;31m🚫 ENVIRONMENT COMPATIBILITY CHECK FAILED\033[0m\n"
@@ -1018,16 +992,12 @@ show_system_info() {
   # Show DNS servers
   echo "  • DNS Servers:"
   if [[ -f /etc/resolv.conf ]]; then
-    local dns_count=0
-    while IFS= read -r line; do
-      if [[ "$line" =~ ^nameserver[[:space:]]+([0-9a-fA-F.:]+) ]]; then
-        local dns_server="${BASH_REMATCH[1]}"
-        ((dns_count++))
-        echo "    └─ DNS $dns_count: $dns_server"
-      fi
-    done < /etc/resolv.conf
-    
-    if [[ $dns_count -eq 0 ]]; then
+    local dns_servers=($(grep "^nameserver" /etc/resolv.conf | awk '{print $2}'))
+    if [[ ${#dns_servers[@]} -gt 0 ]]; then
+      for i in "${!dns_servers[@]}"; do
+        echo "    └─ DNS $((i+1)): ${dns_servers[i]}"
+      done
+    else
       echo "    └─ No DNS servers found in /etc/resolv.conf"
     fi
   else
@@ -1035,16 +1005,12 @@ show_system_info() {
   fi
   
   # Show systemd-resolved status if available
-  if command -v systemd-resolve >/dev/null 2>&1; then
-    local resolved_dns=$(systemd-resolve --status 2>/dev/null | grep "DNS Servers:" | head -1 | sed 's/.*DNS Servers: *//')
-    if [[ -n "$resolved_dns" ]]; then
-      echo "    └─ Systemd-resolved: $resolved_dns"
-    fi
-  elif command -v resolvectl >/dev/null 2>&1; then
+  if command -v resolvectl >/dev/null 2>&1; then
     local resolved_dns=$(resolvectl status 2>/dev/null | grep "DNS Servers:" | head -1 | sed 's/.*DNS Servers: *//')
-    if [[ -n "$resolved_dns" ]]; then
-      echo "    └─ Systemd-resolved: $resolved_dns"
-    fi
+    [[ -n "$resolved_dns" ]] && echo "    └─ Systemd-resolved: $resolved_dns"
+  elif command -v systemd-resolve >/dev/null 2>&1; then
+    local resolved_dns=$(systemd-resolve --status 2>/dev/null | grep "DNS Servers:" | head -1 | sed 's/.*DNS Servers: *//')
+    [[ -n "$resolved_dns" ]] && echo "    └─ Systemd-resolved: $resolved_dns"
   fi
   
   printf "\n"
@@ -1210,7 +1176,7 @@ show_modules_info() {
     # Environment compatibility
     local module_environment="${MODULE_METADATA["${module}:environment"]:-both}"
     local current_env="host"
-    if [[ "$(detect_docker_environment)" == "true" ]]; then
+    if [[ -f /.dockerenv ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
       current_env="docker"
     fi
     
@@ -1408,7 +1374,6 @@ main_menu() {
     # Debug: show received input if DEBUG is enabled
     if [[ "$OPTIMIZER_DEBUG" == "1" ]]; then
       debug_log "MENU" "User input received: '$choice'" "main_menu"
-      log_message "DEBUG" "INFO" "Received input: '$choice'"
     fi
     
     # Convert to uppercase for case-insensitive matching
