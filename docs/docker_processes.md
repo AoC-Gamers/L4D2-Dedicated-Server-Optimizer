@@ -6,12 +6,12 @@ El módulo **Docker Process Optimization** (`docker_processes.sh`) está especí
 
 ## Uso según Tipo de Servidor
 
-#### Servidor Competitivo (100 tick, 8-16 jugadores)
+#### Servidor Básico/Público (30 tick, 8-12 jugadores)
 ```bash
-DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
-DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
-DOCKER_PROCESS_OTHER_NICE="15"       # Muy baja prioridad para otros
-DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo
+DOCKER_PROCESS_SRCDS_NICE="-5"       # Prioridad moderada
+DOCKER_PROCESS_SRCDS_IONICE="2"      # I/O best-effort
+DOCKER_PROCESS_OTHER_NICE="0"        # Prioridad normal para otros
+DOCKER_PROCESS_ENABLE_RT="false"     # Sin monitoreo continuo
 ```
 
 #### Servidor Casual (60 tick, 8 jugadores)
@@ -20,6 +20,23 @@ DOCKER_PROCESS_SRCDS_NICE="-10"      # Alta prioridad
 DOCKER_PROCESS_SRCDS_IONICE="2"      # I/O best-effort
 DOCKER_PROCESS_OTHER_NICE="5"        # Prioridad moderada
 DOCKER_PROCESS_ENABLE_RT="false"     # Sin monitoreo continuo
+```
+
+#### Servidor Competitivo (100 tick, 8-16 jugadores)
+```bash
+DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
+DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
+DOCKER_PROCESS_OTHER_NICE="15"       # Muy baja prioridad para otros
+DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo
+```
+
+#### Servidor de Alto Rendimiento (120 tick, 8-16 jugadores)
+```bash
+DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
+DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
+DOCKER_PROCESS_OTHER_NICE="19"       # Mínima prioridad para otros
+DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo intensivo
+DOCKER_PROCESS_RT_INTERVAL="15"      # Verificación cada 15 segundos
 ```
 
 ## ¿Por qué es Necesario?
@@ -103,12 +120,12 @@ DOCKER_PROCESS_ENABLE_RT="true"
 
 ### Configuración Recomendada por Escenario
 
-#### Servidor Competitivo (100 tick, 8-16 jugadores)
+#### Servidor Básico/Público (30 tick, 8-12 jugadores)
 ```bash
-DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
-DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
-DOCKER_PROCESS_OTHER_NICE="15"       # Muy baja prioridad para otros
-DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo
+DOCKER_PROCESS_SRCDS_NICE="-5"       # Prioridad moderada
+DOCKER_PROCESS_SRCDS_IONICE="2"      # I/O best-effort
+DOCKER_PROCESS_OTHER_NICE="0"        # Prioridad normal para otros
+DOCKER_PROCESS_ENABLE_RT="false"     # Sin monitoreo continuo
 ```
 
 #### Servidor Casual (60 tick, 8 jugadores)
@@ -117,6 +134,23 @@ DOCKER_PROCESS_SRCDS_NICE="-10"      # Alta prioridad
 DOCKER_PROCESS_SRCDS_IONICE="2"      # I/O best-effort
 DOCKER_PROCESS_OTHER_NICE="5"        # Prioridad moderada
 DOCKER_PROCESS_ENABLE_RT="false"     # Sin monitoreo continuo
+```
+
+#### Servidor Competitivo (100 tick, 8-16 jugadores)
+```bash
+DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
+DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
+DOCKER_PROCESS_OTHER_NICE="15"       # Muy baja prioridad para otros
+DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo
+```
+
+#### Servidor de Alto Rendimiento (120 tick, 8-16 jugadores)
+```bash
+DOCKER_PROCESS_SRCDS_NICE="-20"      # Máxima prioridad
+DOCKER_PROCESS_SRCDS_IONICE="1"      # I/O en tiempo real
+DOCKER_PROCESS_OTHER_NICE="19"       # Mínima prioridad para otros
+DOCKER_PROCESS_ENABLE_RT="true"      # Monitoreo activo intensivo
+DOCKER_PROCESS_RT_INTERVAL="15"      # Verificación cada 15 segundos
 ```
 
 ## Impacto en el Rendimiento
