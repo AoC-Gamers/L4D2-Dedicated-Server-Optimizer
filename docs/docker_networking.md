@@ -174,12 +174,13 @@ DOCKER_NET_OPTIMIZE_QUEUES="true"        # Optimización completa
 DOCKER_NET_DISABLE_OFFLOAD="true"        # Latencia sobre throughput
 ```
 
-### Servidor de Desarrollo/LAN (100 tick, testing)
+### Servidor de Alto Rendimiento (120 tick, 8-16 jugadores)
 ```bash
-DOCKER_NET_BUFFER_SIZE="16777216"        # 16MB suficiente para LAN
-DOCKER_NET_ENABLE_FASTOPEN="false"       # No necesario en LAN
-DOCKER_NET_OPTIMIZE_QUEUES="false"       # Configuración estándar
-DOCKER_NET_DISABLE_OFFLOAD="false"       # Mantener rendimiento estándar
+DOCKER_NET_BUFFER_SIZE="67108864"        # 64MB para tráfico extremo
+DOCKER_NET_ENABLE_FASTOPEN="true"        # Crítico para latencia
+DOCKER_NET_OPTIMIZE_QUEUES="true"        # Optimización máxima
+DOCKER_NET_DISABLE_OFFLOAD="true"        # Prioridad total a latencia
+DOCKER_NET_NETDEV_BACKLOG="7500"         # Mayor cola para ráfagas
 ```
 
 ## Impacto en el Rendimiento
@@ -237,6 +238,18 @@ Outbound: ~7,680-15,360 packets/sec, ~15-35 Mbps
 TCP buffers: 15-30% utilization
 UDP buffers: 10-25% utilization
 Kernel backlog: <500 packets queued
+```
+
+#### 120 tick Server (8-16 players)
+```bash
+# Tráfico esperado (alto rendimiento)
+Inbound: ~1,152-2,304 packets/sec, ~5-15 Mbps
+Outbound: ~9,216-18,432 packets/sec, ~18-45 Mbps
+
+# Buffer usage optimizado
+TCP buffers: 20-40% utilization
+UDP buffers: 15-35% utilization
+Kernel backlog: <750 packets queued
 ```
 
 ## Arquitectura de Red en Contenedores
